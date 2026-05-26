@@ -1,4 +1,3 @@
 streamlit
-transformers
+transformers[sentencepiece]
 torch
-sentencepiece
