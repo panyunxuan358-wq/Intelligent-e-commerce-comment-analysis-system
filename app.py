@@ -1,35 +1,37 @@
 import streamlit as st
-from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer, SummarizationPipeline
+from transformers import pipeline
 import textwrap
 
 # --- 1. 页面配置 ---
 st.set_page_config(page_title="电商评论智能分析系统", page_icon="🛍️")
 
-# --- 2. 加载模型 (手动装配版) ---
+# --- 2. 加载模型 ---
 @st.cache_resource
 def load_models():
-    # Pipeline 1: 情感分析 (保持不变)
+    # 情感分析 (Pipeline 1)
+    # 使用你的 Hugging Face 模型地址
     sentiment_pipe = pipeline("text-classification", model="panyunxuan/Model")
     
-    # Pipeline 2: 摘要分析 (手动装配，不使用 pipeline("summarization"))
-    sum_model_name = "sshleifer/distilbart-cnn-12-6"
-    
-    # 显式加载模型和分词器
-    sum_model = AutoModelForSeq2SeqLM.from_pretrained(sum_model_name)
-    sum_tokenizer = AutoTokenizer.from_pretrained(sum_model_name)
-    
-    # 手动创建 Pipeline 对象，绕过任务名检查
-    summary_pipe = SummarizationPipeline(model=sum_model, tokenizer=sum_tokenizer)
+    # 摘要分析 (Pipeline 2)
+    # 只要安装了 sentencepiece，这个标准调用就不会报错
+    summary_pipe = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
     
     return sentiment_pipe, summary_pipe
 
 st.title("🛍️ Amazon 电商评论智能分析系统")
 st.markdown("输入一段产品评论，AI 将自动判断**情感倾向**并生成**核心摘要**。")
 
-with st.spinner("正在初始化 AI 模型，请稍候..."):
-    sentiment_model, summary_model = load_models()
+# 尝试加载模型，并捕获可能的错误以便调试
+try:
+    with st.spinner("正在初始化 AI 模型，请稍候 (首次加载约需 1-2 分钟)..."):
+        sentiment_model, summary_model = load_models()
+    st.success("✅ AI 模型加载成功！")
+except Exception as e:
+    st.error(f"❌ 模型加载失败。错误详情: {e}")
+    st.info("提示：如果是首次部署，请等待 2 分钟让服务器完成下载。如果持续报错，请尝试在右下角 Manage app 中点击 Reboot。")
+    st.stop()
 
-# --- 3. 核心分析逻辑 (保持不变) ---
+# --- 3. 核心分析逻辑 ---
 def analyze_review(text):
     # 情感分析
     p1_res = sentiment_model(text[:512])[0]
@@ -40,8 +42,8 @@ def analyze_review(text):
     words = text.split()
     if len(words) > 30:
         d_max = max(25, min(int(len(words) * 0.3), 80))
-        # 调用手动装配的摘要模型
         raw_s = summary_model(text, max_length=d_max, min_length=int(d_max/2), early_stopping=True)[0]['summary_text']
+        # 句子完整性保护
         last_p = max(raw_s.rfind('.'), raw_s.rfind('!'), raw_s.rfind('?'))
         final_s = raw_s[:last_p+1] if last_p != -1 else raw_s
     else:
@@ -49,7 +51,7 @@ def analyze_review(text):
         
     return label, score, final_s
 
-# --- 4. 网页交互界面 (保持不变) ---
+# --- 4. 网页交互界面 ---
 input_text = st.text_area("请粘贴 Amazon 产品评论 (英文):", placeholder="Example: I love this phone case! It's very durable...", height=200)
 
 if st.button("开始分析"):
