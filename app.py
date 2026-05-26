@@ -1,22 +1,25 @@
 import streamlit as st
-from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer, SummarizationPipeline
+from transformers import pipeline
 import textwrap
 
-# --- 2. 加载模型 (手动装配版) ---
+# --- 1. 页面配置 ---
+st.set_page_config(page_title="电商评论智能分析系统", page_icon="🛍️")
+
+# --- 2. 加载模型 ---
 @st.cache_resource
 def load_models():
-    # 情感分析模型加载
+    # 加载你上传的情感分析模型
     sentiment_pipe = pipeline("text-classification", model="panyunxuan/Model")
-    
-    # 摘要模型加载：手动指定模型类和分词器
-    sum_model_name = "sshleifer/distilbart-cnn-12-6"
-    sum_model = AutoModelForSeq2SeqLM.from_pretrained(sum_model_name)
-    sum_tokenizer = AutoTokenizer.from_pretrained(sum_model_name)
-    
-    # 直接使用 SummarizationPipeline 类，绕过 pipeline("summarization") 字符串识别
-    summary_pipe = SummarizationPipeline(model=sum_model, tokenizer=sum_tokenizer)
-    
+    # 加载摘要模型
+    summary_pipe = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
     return sentiment_pipe, summary_pipe
+
+st.title("🛍️ Amazon 电商评论智能分析系统")
+st.markdown("输入一段产品评论，AI 将自动判断**情感倾向**并生成**核心摘要**。")
+
+# 调用加载函数
+with st.spinner("正在初始化 AI 模型，请稍候..."):
+    sentiment_model, summary_model = load_models()
 
 # --- 3. 核心分析逻辑 ---
 def analyze_review(text):
@@ -29,6 +32,7 @@ def analyze_review(text):
     words = text.split()
     if len(words) > 30:
         d_max = max(25, min(int(len(words) * 0.3), 80))
+        # 这里使用 summary_model 变量名
         raw_s = summary_model(text, max_length=d_max, min_length=int(d_max/2), early_stopping=True)[0]['summary_text']
         # 句子完整性保护
         last_p = max(raw_s.rfind('.'), raw_s.rfind('!'), raw_s.rfind('?'))
@@ -47,10 +51,9 @@ if st.button("开始分析"):
         
         st.divider()
         
-        # 展示情感结果
         col1, col2 = st.columns(2)
         with col1:
-            # 根据情感显示不同颜色
+            # 你的模型输出通常是 LABEL_1 (正) 或 LABEL_0 (负)
             color = "green" if label == "LABEL_1" else "red"
             sentiment_text = "正面 (Positive)" if label == "LABEL_1" else "负面 (Negative)"
             st.subheader("情感倾向")
@@ -61,10 +64,8 @@ if st.button("开始分析"):
             st.progress(score)
             st.write(f"{score:.2%}")
             
-        # 展示摘要结果
         st.subheader("内容精炼 (AI Summary)")
         st.info(summary)
-        
     else:
         st.warning("请输入评论内容后再点击分析。")
 
