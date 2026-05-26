@@ -1,24 +1,22 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer, SummarizationPipeline
 import textwrap
 
-# --- 1. 页面配置 ---
-st.set_page_config(page_title="电商评论智能分析系统", page_icon="🛍️")
-
-# --- 2. 加载模型 (使用缓存避免重复加载) ---
+# --- 2. 加载模型 (手动装配版) ---
 @st.cache_resource
 def load_models():
-    # 情感分析
+    # 情感分析模型加载
     sentiment_pipe = pipeline("text-classification", model="panyunxuan/Model")
-    # 摘要分析：显式指定任务类型
-    summary_pipe = pipeline(task="summarization", model="sshleifer/distilbart-cnn-12-6")
+    
+    # 摘要模型加载：手动指定模型类和分词器
+    sum_model_name = "sshleifer/distilbart-cnn-12-6"
+    sum_model = AutoModelForSeq2SeqLM.from_pretrained(sum_model_name)
+    sum_tokenizer = AutoTokenizer.from_pretrained(sum_model_name)
+    
+    # 直接使用 SummarizationPipeline 类，绕过 pipeline("summarization") 字符串识别
+    summary_pipe = SummarizationPipeline(model=sum_model, tokenizer=sum_tokenizer)
+    
     return sentiment_pipe, summary_pipe
-
-st.title("🛍️ Amazon 电商评论智能分析系统")
-st.markdown("输入一段产品评论，AI 将自动判断**情感倾向**并生成**核心摘要**。")
-
-with st.spinner("正在初始化 AI 模型，请稍候..."):
-    sentiment_model, summary_model = load_models()
 
 # --- 3. 核心分析逻辑 ---
 def analyze_review(text):
